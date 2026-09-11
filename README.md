@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="icon/AppIcon.png" width="128" alt="DroidHub app icon">
+  <img src=".github/icon.png" width="128" alt="DroidHub app icon">
   <h1>🤖 DroidHub</h1>
   <p>Android device hub for <strong>macOS</strong>, in the spirit of the Device Hub that ships with Xcode 27. Emulators and phones in one list, with the screen live and clickable inside a normal window.<br>
   <strong>Tiling friendly:</strong> there's no floating toolbar and no custom chrome, so yabai and friends tile it like any other app.<br>
@@ -93,6 +93,7 @@ Sources/DroidHub/
   Hub.swift      device discovery (adb, AVD files), boot, shutdown, screenshots
   Mirror.swift   scrcpy client: sockets, H.264 to CMSampleBuffer, control messages
 Tests/           protocol tests
+icon/            AppIcon.icon (Icon Composer) and icon.py, the Blender script that renders its layers
 .github/         CI (pull requests), CR (release-please), CD (signed dmg)
 build.sh         builds, signs and packages DroidHub.app
 version.txt      current version, bumped by release-please

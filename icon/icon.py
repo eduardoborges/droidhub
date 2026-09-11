@@ -1,6 +1,8 @@
 # Renders the DroidHub app icon with Cycles, following the macOS icon grid
 # (824 px squircle body on a 1024 px canvas, light from the top).
-# Usage: blender -b --factory-startup --python icon/icon.py -- icon/AppIcon.png [size] [samples]
+# Usage: blender -b --factory-startup --python icon/icon.py -- icon/AppIcon.png [size] [samples] [layer]
+# The app ships icon/AppIcon.icon, whose layers come from the grid, phone and droid
+# layer renders. Without a layer it renders the whole icon in one image, as a preview.
 #
 # The bugdroid head is based on the Android robot, created and shared by Google
 # under the Creative Commons Attribution 3.0 License.
@@ -14,6 +16,10 @@ argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = argv[0] if argv else "AppIcon.png"
 SIZE = int(argv[1]) if len(argv) > 1 else 1024
 SAMPLES = int(argv[2]) if len(argv) > 2 else 256
+# With a layer name, renders only that part on a transparent canvas the size of the
+# squircle, as a layer for icon/AppIcon.icon. The system draws the squircle itself.
+LAYER = argv[3] if len(argv) > 3 else ""
+LAYERS = {"grid": ("Grid",), "phone": ("Phone",), "droid": ("Head", "Antenna", "Eye")}
 
 # 1 unit = 100 px of the 1024 px canvas.
 CANVAS = 10.24
@@ -118,7 +124,7 @@ top = base_depth + 2 * base_bevel + 0.002
 grid = material("Grid", "#C6D7EE", "#BFD1EA", half)
 w = 0.028
 for g in (-half / 2, 0, half / 2):
-    reach = half * (1 - abs(g / half) ** 5) ** (1 / 5) - base_bevel - 0.12
+    reach = half if LAYER else half * (1 - abs(g / half) ** 5) ** (1 / 5) - base_bevel - 0.12
     quad(f"GridV{g}", g - w, -reach, g + w, reach, top, grid)
     quad(f"GridH{g}", -reach, g - w, reach, g + w, top + 0.001, grid)  # lifted so crossings don't z-fight
 
@@ -151,7 +157,7 @@ catcher.is_shadow_catcher = True
 # Camera straight on, light from the top like every macOS icon.
 cam = bpy.data.cameras.new("Camera")
 cam.type = "ORTHO"
-cam.ortho_scale = CANVAS
+cam.ortho_scale = BODY if LAYER else CANVAS
 cam.clip_end = 100
 cam_ob = bpy.data.objects.new("Camera", cam)
 cam_ob.location = (0, 0, 30)
@@ -170,6 +176,11 @@ def area(name, loc, size, power):
 
 area("Key", (0, 10, 14), 12, 3200)
 area("Fill", (0, -12, 10), 14, 1400)
+
+if LAYER:
+    for ob in bpy.data.objects:
+        if ob.type in ("CURVE", "MESH") and not ob.name.startswith(LAYERS[LAYER]):
+            ob.hide_render = True
 
 scene = bpy.context.scene
 scene.camera = cam_ob

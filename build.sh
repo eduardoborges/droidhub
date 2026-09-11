@@ -18,14 +18,12 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/DroidHub "$APP/Contents/MacOS/"
 cp "$JAR" "$APP/Contents/Resources/scrcpy-server"
 
-# icon/AppIcon.png comes from icon/icon.py (Blender).
-ICONSET="$(mktemp -d)/AppIcon.iconset"
-mkdir -p "$ICONSET"
-for s in 16 32 128 256 512; do
-  sips -z $s $s icon/AppIcon.png --out "$ICONSET/icon_${s}x${s}.png" > /dev/null
-  sips -z $((s * 2)) $((s * 2)) icon/AppIcon.png --out "$ICONSET/icon_${s}x${s}@2x.png" > /dev/null
-done
-iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+# Icon Composer icon with layers rendered by icon/icon.py. actool writes Assets.car,
+# which macOS 26 needs to skip the gray squircle it puts around legacy icons, plus
+# an AppIcon.icns fallback.
+xcrun actool icon/AppIcon.icon --compile "$APP/Contents/Resources" --platform macosx \
+  --minimum-deployment-target 26.0 --app-icon AppIcon \
+  --output-partial-info-plist "$(mktemp -d)/icon.plist" > /dev/null
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -33,6 +31,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <dict>
     <key>CFBundleExecutable</key><string>DroidHub</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundleIconName</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>com.eduardo.droidhub</string>
     <key>CFBundleName</key><string>DroidHub</string>
     <key>CFBundlePackageType</key><string>APPL</string>
