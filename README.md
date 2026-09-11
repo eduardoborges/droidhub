@@ -39,6 +39,7 @@ And the rest:
 - ⌘→ rotates the device.
 - The inspector switches dark mode, font size, show taps and layout bounds, and lists model, Android version, resolution and density.
 - Physical devices connected through adb show up next to the emulators.
+- The + in the sidebar creates emulators from Android Studio's device catalog and any installed system image, with no SDK cmdline-tools needed. Emulators that are off can be deleted from their context menu.
 - Plays well with AI agents. They drive the device through `adb` while you watch in DroidHub, and Show Taps marks every tap they make.
 
 ## Keyboard

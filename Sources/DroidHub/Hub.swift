@@ -147,7 +147,7 @@ final class Hub {
         }
     }
 
-    private static func ini(_ url: URL) -> [String: String] {
+    nonisolated static func ini(_ url: URL) -> [String: String] {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [:] }
         let pairs = text.split(separator: "\n").compactMap { line -> (String, String)? in
             let kv = line.split(separator: "=", maxSplits: 1)

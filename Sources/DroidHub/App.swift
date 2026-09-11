@@ -16,6 +16,7 @@ struct ContentView: View {
     @Environment(Hub.self) private var hub
     @State private var query = ""
     @State private var panel: Panel?
+    @State private var creating = false
 
     var body: some View {
         @Bindable var hub = hub
@@ -26,6 +27,10 @@ struct ContentView: View {
             }
             .searchable(text: $query, placement: .sidebar)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+            .toolbar {
+                Button("New Emulator", systemImage: "plus") { creating = true }
+            }
+            .sheet(isPresented: $creating) { NewEmulatorSheet().environment(hub) }
         } detail: {
             if let device = hub.selected {
                 DeviceView(device: device, panel: $panel).id(device.id)
@@ -47,6 +52,7 @@ struct ContentView: View {
 struct DeviceRow: View {
     @Environment(Hub.self) private var hub
     let device: Device
+    @State private var confirmingDelete = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -68,10 +74,21 @@ struct DeviceRow: View {
             if device.isEmulator {
                 if device.serial == nil {
                     Button("Boot") { hub.boot(device) }
+                    Divider()
+                    Button("Delete…", role: .destructive) { confirmingDelete = true }
+                        .disabled(hub.booting.contains(device.id))
                 } else {
                     Button("Shut Down") { hub.shutdown(device) }
                 }
             }
+        }
+        .confirmationDialog("Delete \(device.name)?", isPresented: $confirmingDelete) {
+            Button("Delete", role: .destructive) {
+                if let avd = device.avd { try? AVD.delete(avd) }
+                Task { await hub.refresh() }
+            }
+        } message: {
+            Text("The emulator and everything installed on it go away. This can't be undone.")
         }
     }
 }
