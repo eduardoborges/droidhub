@@ -1,0 +1,18 @@
+name: CI
+
+# Validates pull requests. Release builds live in CD.
+on:
+  pull_request:
+    paths-ignore: ['**.md']
+
+jobs:
+  build:
+    # macos-26: the UI uses SDK 26 APIs (glassEffect)
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
