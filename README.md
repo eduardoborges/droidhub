@@ -9,6 +9,7 @@
   [![platform](https://img.shields.io/badge/platform-macOS%2026%2B-blue)](#requirements)
   [![swift](https://img.shields.io/badge/Swift-SwiftUI-orange)](Sources/DroidHub/)
   [![scrcpy](https://img.shields.io/badge/scrcpy-4.1-green)](https://github.com/Genymobile/scrcpy)
+  [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
 </div>
 
@@ -98,3 +99,9 @@ icon/            AppIcon.icon (Icon Composer) and icon.py, the Blender script th
 build.sh         builds, signs and packages DroidHub.app
 version.txt      current version, bumped by release-please
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE).
+
+The scrcpy server that `build.sh` downloads and bundles is Apache 2.0, by Genymobile. The bugdroid in the icon is based on the Android robot, created and shared by Google under the [Creative Commons Attribution 3.0 License](https://creativecommons.org/licenses/by/3.0/).
