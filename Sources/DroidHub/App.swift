@@ -15,7 +15,7 @@ struct DroidHubApp: App {
 struct ContentView: View {
     @Environment(Hub.self) private var hub
     @State private var query = ""
-    @State private var inspector = false
+    @State private var panel: Panel?
 
     var body: some View {
         @Bindable var hub = hub
@@ -28,7 +28,7 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
             if let device = hub.selected {
-                DeviceView(device: device, inspector: $inspector).id(device.id)
+                DeviceView(device: device, panel: $panel).id(device.id)
             } else {
                 ContentUnavailableView("No Devices", systemImage: "smartphone", description: Text("Create an emulator in Android Studio or plug in a device."))
             }
@@ -79,7 +79,7 @@ struct DeviceRow: View {
 struct DeviceView: View {
     @Environment(Hub.self) private var hub
     let device: Device
-    @Binding var inspector: Bool
+    @Binding var panel: Panel?
     @State private var mirror: Mirror?
     @State private var size = CGSize(width: 1080, height: 2400)
     @State private var failure: String?
@@ -97,13 +97,19 @@ struct DeviceView: View {
                         Button("Power", systemImage: "power") { mirror.key(26) }
                     }
                 }
-                ToolbarItem {
-                    Button("Inspector", systemImage: "sidebar.trailing") { inspector.toggle() }
+                ToolbarItemGroup {
+                    ForEach(Panel.allCases, id: \.self) { p in
+                        Toggle(p.title, systemImage: p.icon, isOn: Binding(get: { panel == p }, set: { panel = $0 ? p : nil }))
+                    }
                 }
             }
-            .inspector(isPresented: $inspector) {
+            .inspector(isPresented: Binding(get: { panel != nil }, set: { if !$0 { panel = nil } })) {
                 if let serial = device.serial {
-                    InspectorView(device: device, serial: serial)
+                    switch panel {
+                    case .logs: LogsView(serial: serial)
+                    case .crashes: CrashesView(serial: serial)
+                    default: SettingsView(device: device, serial: serial)
+                    }
                 } else {
                     ContentUnavailableView("Offline", systemImage: "powersleep")
                 }
@@ -344,7 +350,7 @@ final class ScreenView: NSView {
     override func selectAll(_ sender: Any?) { mirror.key(29, meta: Self.ctrl) }
 }
 
-struct InspectorView: View {
+struct SettingsView: View {
     let device: Device
     let serial: String
     @State private var dark = false
