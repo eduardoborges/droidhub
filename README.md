@@ -1,5 +1,5 @@
 <div align="center">
-  <img src=".github/screenshot.png" width="360" alt="DroidHub mirroring a Pixel emulator">
+  <img src="icon/AppIcon.png" width="128" alt="DroidHub app icon">
   <h1>🤖 DroidHub</h1>
   <p>Android device hub for <strong>macOS</strong>, in the spirit of the Device Hub that ships with Xcode 27. Emulators and phones in one list, with the screen live and clickable inside a normal window.<br>
   <strong>Tiling friendly:</strong> there's no floating toolbar and no custom chrome, so yabai and friends tile it like any other app.<br>
@@ -15,6 +15,8 @@
 ---
 
 **[Download](https://github.com/eduardoborges/droidhub/releases/latest)** · **[Changelog](CHANGELOG.md)**
+
+<p align="center"><img src=".github/screenshot.png" width="360" alt="DroidHub mirroring a Pixel emulator"></p>
 
 ## Why
 
