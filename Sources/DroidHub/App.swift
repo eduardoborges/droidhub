@@ -3,17 +3,30 @@ import SwiftUI
 @main
 struct DroidHubApp: App {
     @State private var hub = Hub()
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         Window("DroidHub", id: "main") {
             ContentView().environment(hub)
         }
         .defaultSize(width: 1000, height: 900)
+        .commands {
+            CommandGroup(replacing: .appInfo) { Button("About DroidHub") { openWindow(id: "about") } }
+            CommandGroup(replacing: .help) { Button("Welcome to DroidHub") { openWindow(id: "welcome") } }
+        }
+        Window("About DroidHub", id: "about") { AboutView() }
+            .windowStyle(.hiddenTitleBar)
+            .windowResizability(.contentSize)
+        Window("Welcome to DroidHub", id: "welcome") { WelcomeView() }
+            .windowStyle(.hiddenTitleBar)
+            .windowResizability(.contentSize)
     }
 }
 
 struct ContentView: View {
     @Environment(Hub.self) private var hub
+    @Environment(\.openWindow) private var openWindow
+    @AppStorage("welcomed") private var welcomed = false
     @State private var query = ""
     @State private var panel: Panel?
     @State private var creating = false
@@ -39,6 +52,7 @@ struct ContentView: View {
             }
         }
         .task { await hub.poll() }
+        .onAppear { if !welcomed { openWindow(id: "welcome") } }
     }
 
     @ViewBuilder private func section(_ title: String, _ devices: [Device]) -> some View {
