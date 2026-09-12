@@ -80,7 +80,8 @@ final class Hub {
         for (serial, p) in props.sorted(by: { $0.key < $1.key }) {
             let model = p["ro.product.model"] ?? serial
             var d: Device
-            if let avd = p["ro.boot.qemu.avd_name"], let i = list.firstIndex(where: { $0.avd == avd }) {
+            // Older images (API 30 and below) publish ro.kernel.qemu.avd_name instead.
+            if let avd = p["ro.boot.qemu.avd_name"] ?? p["ro.kernel.qemu.avd_name"], let i = list.firstIndex(where: { $0.avd == avd }) {
                 d = list.remove(at: i)
             } else {
                 d = Device(id: serial, name: model, detail: p["ro.product.manufacturer"] ?? "Android")
@@ -115,6 +116,20 @@ final class Hub {
         Task { await adb("-s", serial, "emu", "kill") }
     }
 
+    /// scrcpy's own rotate is undone right away when auto-rotate is on, which is the
+    /// default. Emulators turn through their console instead, and phones get the
+    /// other orientation locked.
+    func rotate(_ device: Device) {
+        guard let serial = device.serial else { return }
+        Task {
+            if device.isEmulator {
+                await adb("-s", serial, "emu", "rotate")
+            } else {
+                await adb("-s", serial, "shell", "r=$(dumpsys input | grep -m1 -oE 'orientation=[0-9]' | cut -d= -f2); settings put system accelerometer_rotation 0; settings put system user_rotation $(( (${r:-0} & 1) ^ 1 ))")
+            }
+        }
+    }
+
     /// Saves to the Desktop and copies to the clipboard, like Simulator.
     func screenshot(_ device: Device) async {
         guard let serial = device.serial else { return }
@@ -122,7 +137,7 @@ final class Hub {
         guard !png.isEmpty else { return }
         let date = Date.now.formatted(.verbatim("\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) at \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)).\(minute: .twoDigits).\(second: .twoDigits)", timeZone: .current, calendar: .current))
         let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
-        try? png.write(to: desktop.appending(path: "\(device.name) \(date).png"))
+        try? png.write(to: desktop.appending(path: "\(device.name.replacingOccurrences(of: "/", with: "-")) \(date).png"))
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setData(png, forType: .png)
     }

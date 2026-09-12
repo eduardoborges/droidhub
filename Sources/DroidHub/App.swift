@@ -53,6 +53,7 @@ struct DeviceRow: View {
     @Environment(Hub.self) private var hub
     let device: Device
     @State private var confirmingDelete = false
+    @State private var deleteRefused = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -75,8 +76,11 @@ struct DeviceRow: View {
                 if device.serial == nil {
                     Button("Boot") { hub.boot(device) }
                     Divider()
-                    Button("Delete…", role: .destructive) { confirmingDelete = true }
-                        .disabled(hub.booting.contains(device.id))
+                    Button("Delete…", role: .destructive) {
+                        // An emulator started outside DroidHub has no serial until it finishes booting.
+                        if let avd = device.avd, AVD.isRunning(avd) { deleteRefused = true } else { confirmingDelete = true }
+                    }
+                    .disabled(hub.booting.contains(device.id))
                 } else {
                     Button("Shut Down") { hub.shutdown(device) }
                 }
@@ -89,6 +93,11 @@ struct DeviceRow: View {
             }
         } message: {
             Text("The emulator and everything installed on it go away. This can't be undone.")
+        }
+        .alert("\(device.name) is running", isPresented: $deleteRefused) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Shut it down before deleting it.")
         }
     }
 }
@@ -188,7 +197,7 @@ struct DeviceView: View {
                 .keyboardShortcut("s")
                 .padding(4)
                 .glassEffect(in: .circle)
-            bar("Rotate", "rotate.right") { mirror.rotate() }
+            bar("Rotate", "rotate.right") { hub.rotate(device) }
                 .keyboardShortcut(.rightArrow)
                 .padding(4)
                 .glassEffect(in: .circle)
@@ -202,6 +211,7 @@ struct DeviceView: View {
         }
         .buttonStyle(.plain)
         .help(title)
+        .accessibilityLabel(title)
     }
 
     private func connect(_ serial: String) async {
@@ -209,13 +219,15 @@ struct DeviceView: View {
         failure = nil
         let m = Mirror(serial: serial)
         m.onSize = { size = $0 }
-        m.onClose = {
+        m.onClose = { [weak m] in
+            m?.stop()  // frees the server and the adb forward now, not at the next Retry
             mirror = nil
             failure = "Disconnected"
         }
         do {
             try await m.start()
         } catch {
+            m.stop()
             failure = "\(error)"
             return
         }
@@ -273,6 +285,7 @@ struct Screen: NSViewRepresentable {
 /// Hosts the video layer and turns mouse and keyboard input into Android events.
 final class ScreenView: NSView {
     private let mirror: Mirror
+    private var marked: String?
     private static let ctrl: UInt32 = 0x3000  // META_CTRL_ON | META_CTRL_LEFT_ON
     private static let commands: [Selector: (UInt32, UInt32)] = [
         #selector(NSResponder.deleteBackward(_:)): (67, 0),
@@ -295,6 +308,9 @@ final class ScreenView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.addSublayer(mirror.layer)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityLabel("Device screen")
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -330,8 +346,9 @@ final class ScreenView: NSView {
     override func rightMouseDown(with event: NSEvent) { mirror.key(4) }
 
     override func scrollWheel(with event: NSEvent) {
-        // ponytail: trackpad points per notch picked by feel
-        let k: CGFloat = event.hasPreciseScrollingDeltas ? 1 / 25 : 1
+        // Trackpads report points and wheels report notches. Converting points at the
+        // current zoom keeps the content under the fingers.
+        let k = event.hasPreciseScrollingDeltas ? 1 / mirror.pointsPerNotch(viewWidth: bounds.width) : 1
         mirror.scroll(at: point(event), dx: Float(-event.scrollingDeltaX * k), dy: Float(event.scrollingDeltaY * k))
     }
 
@@ -350,10 +367,6 @@ final class ScreenView: NSView {
         return super.performKeyEquivalent(with: event)
     }
 
-    override func insertText(_ string: Any) {
-        mirror.type((string as? NSAttributedString)?.string ?? string as? String ?? "")
-    }
-
     override func doCommand(by selector: Selector) {
         if let (code, meta) = Self.commands[selector] { mirror.key(code, meta: meta) }
     }
@@ -365,6 +378,31 @@ final class ScreenView: NSView {
     @objc func copy(_ sender: Any?) { mirror.key(31, meta: Self.ctrl) }
     @objc func cut(_ sender: Any?) { mirror.key(52, meta: Self.ctrl) }
     override func selectAll(_ sender: Any?) { mirror.key(29, meta: Self.ctrl) }
+}
+
+/// Being a text input client is what makes dead keys and input methods work: the
+/// system composes "´" and "e" into "é" and hands over the finished text.
+extension ScreenView: NSTextInputClient {
+    func insertText(_ string: Any, replacementRange: NSRange) {
+        marked = nil
+        mirror.type((string as? NSAttributedString)?.string ?? string as? String ?? "")
+    }
+
+    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        marked = (string as? NSAttributedString)?.string ?? string as? String
+    }
+
+    func unmarkText() { marked = nil }
+    func hasMarkedText() -> Bool { marked != nil }
+    func markedRange() -> NSRange { NSRange(location: marked == nil ? NSNotFound : 0, length: (marked as NSString?)?.length ?? 0) }
+    func selectedRange() -> NSRange { NSRange(location: NSNotFound, length: 0) }
+    func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? { nil }
+    func validAttributesForMarkedText() -> [NSAttributedString.Key] { [] }
+    func characterIndex(for point: NSPoint) -> Int { NSNotFound }
+
+    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
+        window?.convertToScreen(convert(bounds, to: nil)) ?? .zero
+    }
 }
 
 struct SettingsView: View {
@@ -390,8 +428,10 @@ struct SettingsView: View {
             }
             Section("Debug") {
                 Toggle("Show Taps", isOn: apply($showTaps) { "settings put system show_touches \($0 ? 1 : 0)" })
+                    .accessibilityLabel("Show Taps")
                 // 1599295570 is SYSPROPS_TRANSACTION: makes running apps pick up the new property.
                 Toggle("Layout Bounds", isOn: apply($layoutBounds) { "setprop debug.layout \($0); service call activity 1599295570" })
+                    .accessibilityLabel("Layout Bounds")
             }
             Section("Device") {
                 LabeledContent("Model", value: device.model)

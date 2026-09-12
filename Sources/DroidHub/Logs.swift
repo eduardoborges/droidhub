@@ -195,6 +195,17 @@ struct LogsView: View {
                 .onChange(of: shown.last?.id) { _, id in
                     if follow, let id { proxy.scrollTo(id, anchor: .bottom) }
                 }
+                .onChange(of: follow) { _, on in
+                    if on, let id = shown.last?.id { proxy.scrollTo(id, anchor: .bottom) }
+                }
+                // Scrolling up to read stops following, and reaching the end again resumes it.
+                // Geometry rather than scroll phases, so wheels, trackpads and the scroller all count.
+                // A shrinking filter also lowers the offset, but it leaves the view at the end.
+                .onScrollGeometryChange(for: ScrollEdge.self) { g in
+                    ScrollEdge(offset: g.contentOffset.y, atEnd: g.contentOffset.y + g.containerSize.height >= g.contentSize.height - 24)
+                } action: { old, new in
+                    if new.atEnd { follow = true } else if new.offset < old.offset - 1 { follow = false }
+                }
             }
         }
         .inspectorColumnWidth(min: 280, ideal: 440, max: 900)
@@ -204,6 +215,11 @@ struct LogsView: View {
             logcat.stop()
         }
     }
+}
+
+private struct ScrollEdge: Equatable {
+    var offset: CGFloat
+    var atEnd: Bool
 }
 
 struct LogRow: View {

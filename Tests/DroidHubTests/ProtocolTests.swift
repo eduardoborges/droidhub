@@ -25,3 +25,11 @@ import Testing
     #expect(scroll.count == 21)
     #expect(scroll.int(15) as Int16 == .max)
 }
+
+@Test func scrollNotchesFollowDensityAndZoom() {
+    #expect(Mirror.density(from: "Physical density: 420\n") == 420)
+    #expect(Mirror.density(from: "Physical density: 420\r\nOverride density: 480\r\n") == 480)
+    #expect(Mirror.density(from: "") == nil)
+    // 64dp at 420 dpi is 168 px; shown at half size that is 84 points.
+    #expect(Mirror.pointsPerNotch(density: 420, viewWidth: 540, videoWidth: 1080) == 84)
+}

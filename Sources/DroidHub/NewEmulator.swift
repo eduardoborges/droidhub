@@ -138,9 +138,23 @@ enum AVD {
         return id
     }
 
+    /// Removes whichever of the two files exist, so a half-deleted AVD can still go away.
     static func delete(_ id: String) throws {
-        try FileManager.default.removeItem(at: SDK.avdHome.appending(path: "\(id).avd"))
-        try FileManager.default.removeItem(at: SDK.avdHome.appending(path: "\(id).ini"))
+        for url in [SDK.avdHome.appending(path: "\(id).ini"), SDK.avdHome.appending(path: "\(id).avd")]
+        where FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
+
+    /// True while an emulator process has this AVD open, including ones started outside DroidHub.
+    static func isRunning(_ id: String) -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        p.arguments = ["-f", "--", "-avd \(id)( |$)"]
+        p.standardOutput = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return false }
+        p.waitUntilExit()
+        return p.terminationStatus == 0
     }
 }
 

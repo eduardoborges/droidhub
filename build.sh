@@ -52,6 +52,7 @@ fi
 
 if [ -n "${SIGN_IDENTITY:-}" ] && [ -n "${NOTARY_KEY_ID:-}" ]; then
   KEY=$(mktemp)
+  trap 'rm -f "$KEY"' EXIT  # the key must not outlive a failed notarization
   printf '%s' "$NOTARY_KEY_P8" > "$KEY"
   ditto -c -k --keepParent "$APP" build/notarize.zip
   xcrun notarytool submit build/notarize.zip --key "$KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait

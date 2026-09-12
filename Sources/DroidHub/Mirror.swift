@@ -21,6 +21,9 @@ final class Mirror {
     private var control: Socket?
     private var port = ""
     private var closed = false
+    private var log: Pipe?
+    /// Screen density in dpi, read from the device on start. Main thread only.
+    private var density = 420.0
     private let writes = DispatchQueue(label: "droidhub.control")
 
     init(serial: String) {
@@ -39,6 +42,7 @@ final class Mirror {
         await adb("-s", serial, "push", jar.path, remote)
         port = await adb("-s", serial, "forward", "tcp:0", "localabstract:scrcpy_\(scid)").trimmingCharacters(in: .whitespacesAndNewlines)
         guard let localPort = UInt16(port) else { throw MirrorError("adb forward failed") }
+        density = Self.density(from: await adb("-s", serial, "shell", "wm", "density")) ?? density
 
         let server = Process()
         server.executableURL = URL(fileURLWithPath: SDK.adb)
@@ -61,8 +65,13 @@ final class Mirror {
             let out = await Task.detached { String(decoding: log.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self) }.value
             throw MirrorError(out.split(separator: "\n").last { $0.contains("ERROR") }.map(String.init) ?? "scrcpy server didn't start")
         }
-        // Keep draining the server log, or it blocks once the pipe fills up.
-        log.fileHandleForReading.readabilityHandler = { FileHandle.standardError.write($0.availableData) }
+        // Keep draining the server log, or it blocks once the pipe fills up. At EOF the
+        // handler fires nonstop with empty reads and pins a core, so it removes itself.
+        log.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty { handle.readabilityHandler = nil } else { FileHandle.standardError.write(data) }
+        }
+        self.log = log
 
         self.video = video
         self.control = control
@@ -72,6 +81,7 @@ final class Mirror {
 
     func stop() {
         closed = true
+        log?.fileHandleForReading.readabilityHandler = nil
         video?.shutdown()
         control?.shutdown()
         server?.terminate()
@@ -104,7 +114,21 @@ final class Mirror {
     }
 
     func paste(_ text: String) { send(Control.setClipboard(text, paste: true)) }
-    func rotate() { send(Control.rotate) }
+
+    /// Screen points that one wheel notch covers at the current zoom.
+    func pointsPerNotch(viewWidth: CGFloat) -> CGFloat {
+        size.width > 0 ? Self.pointsPerNotch(density: density, viewWidth: viewWidth, videoWidth: size.width) : 25
+    }
+
+    /// Android scrolls 64dp per notch (config_verticalScrollFactor).
+    static func pointsPerNotch(density: Double, viewWidth: Double, videoWidth: Double) -> Double {
+        64 * density / 160 * viewWidth / videoWidth
+    }
+
+    /// Last number in `wm density` output, which is the override when there is one.
+    static func density(from output: String) -> Double? {
+        output.split(whereSeparator: \.isNewline).last.flatMap { $0.split(separator: " ").last }.flatMap { Double($0) }
+    }
 
     private func pixels(_ p: CGPoint) -> (Int32, Int32, UInt16, UInt16)? {
         guard size.width >= 1, size.height >= 1 else { return nil }
@@ -175,8 +199,6 @@ final class Mirror {
 }
 
 enum Control {
-    static let rotate = Data([11])
-
     static func key(_ action: UInt8, _ code: UInt32, meta: UInt32 = 0) -> Data {
         var d = Data([0, action])
         d.append(be: code)
