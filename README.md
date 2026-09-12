@@ -63,7 +63,13 @@ And the rest:
 
 ## 🛠 Build
 
-Grab `DroidHub.dmg` from the [latest release](https://github.com/eduardoborges/droidhub/releases/latest), or build it yourself:
+Install it with Homebrew:
+
+```sh
+brew install --cask eduardoborges/tap/droidhub
+```
+
+Or grab `DroidHub.dmg` from the [latest release](https://github.com/eduardoborges/droidhub/releases/latest), or build it yourself:
 
 ```sh
 ./build.sh
