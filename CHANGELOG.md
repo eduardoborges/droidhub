@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/eduardoborges/droidhub/compare/v0.1.0...v0.1.1) (2026-09-12)
+
+
+### Bug Fixes
+
+* bugs found in a QA pass ([f5075dd](https://github.com/eduardoborges/droidhub/commit/f5075ddc75b4e4a6b3b71c1df1b6adc90646970e))
+
 ## 0.1.0 (2026-09-11)
 
 
