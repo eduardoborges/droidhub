@@ -29,7 +29,7 @@ The Android emulator draws its own frameless window with a toolbar floating besi
 - 📱 **Live screen with input.** The device streams H.264 over the scrcpy protocol and the Mac decodes it in hardware. Click and drag become touches, the trackpad scrolls, and a right click goes back.
 - ⌨️ **Type on the device.** Text, arrows and delete go straight to Android. Accented characters travel through the device clipboard, because scrcpy can only inject what the device key map knows. Esc is Back and ⌘M opens the React Native dev menu.
 - 📋 **Shared clipboard.** Copy something on the device and it lands on the Mac. ⌘V pastes the Mac clipboard into the device.
-- 🚀 **Headless emulators.** Boot and shut down AVDs from the sidebar. The emulator's own window never shows up.
+- 🚀 **Headless emulators.** Boot and shut down AVDs from the sidebar. The emulator's own window never shows up. An emulator started from Android Studio or `react-native run-android` gets its window hidden and shows up here too; its Dock icon brings the window back.
 - 🐞 **Logs and crashes.** Logcat streams into the inspector with text and level filters, so `ReactNativeJS` is one word away. Java and native crashes from the device's crash buffer show up as reports you can expand and copy.
 
 And the rest:
