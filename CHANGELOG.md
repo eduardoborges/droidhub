@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/eduardoborges/droidhub/compare/v0.1.1...v0.2.0) (2026-09-14)
+
+
+### Features
+
+* hide the window of emulators started elsewhere ([12e97fd](https://github.com/eduardoborges/droidhub/commit/12e97fda56be4106500990dd434cca5e750c57e9))
+* welcome wizard and about window ([d167c4e](https://github.com/eduardoborges/droidhub/commit/d167c4e7292b66ce4c83c83900abb398b2b63d48))
+
 ## [0.1.1](https://github.com/eduardoborges/droidhub/compare/v0.1.0...v0.1.1) (2026-09-12)
 
 
