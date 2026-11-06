@@ -341,30 +341,33 @@ struct Phone<Content: View>: View {
     }
 
     private func shell(_ screen: some View) -> some View {
-        let bezel = PhoneFrame.bezel(size)
-        return GeometryReader { geo in
+        GeometryReader { geo in
             let k = geo.size.width / PhoneFrame.outer(size).width
-            let r = radius * k
-            let shell = RoundedRectangle(cornerRadius: r + bezel * k, style: .continuous)
+            let bezel = PhoneFrame.bezel(size) * k, rim = max(2, bezel * 0.5), r = radius * k
+            let body = RoundedRectangle(cornerRadius: r + bezel, style: .continuous)
+            let glass = RoundedRectangle(cornerRadius: r + bezel - rim, style: .continuous)
             ZStack {
-                shell.fill(.black)
-                shell.strokeBorder(
-                    LinearGradient(colors: [Color(white: 0.6), Color(white: 0.28), Color(white: 0.5)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                    lineWidth: max(2, bezel * k * 0.3)
-                )
+                body.fill(PhoneFrame.metal)
+                    .shadow(color: .black.opacity(0.45), radius: bezel * 1.2, y: bezel * 0.6)
+                // The band is rounded, so its outer lip falls into shadow and the top of the curve catches a line of light.
+                body.strokeBorder(.black.opacity(0.55), lineWidth: rim * 0.2)
+                body.inset(by: rim * 0.22).strokeBorder(PhoneFrame.chamfer, lineWidth: max(0.75, rim * 0.28))
+                glass.fill(.black).padding(rim)
+                glass.fill(LinearGradient(colors: [.white.opacity(0.09), .clear], startPoint: .topLeading, endPoint: .center)).padding(rim)
+                glass.strokeBorder(.black, lineWidth: max(0.5, rim * 0.3)).padding(rim)
                 screen
                     .frame(width: size.width * k, height: size.height * k)
                     .clipShape(RoundedRectangle(cornerRadius: r, style: .continuous))
             }
-            .overlay(alignment: .topTrailing) {
+            .background(alignment: .topTrailing) {
                 if size.height > size.width {  // power and volume keys, right edge, portrait only
-                    let h = geo.size.height, w = max(2, bezel * k * 0.3)
+                    let h = geo.size.height, w = rim * 1.6
                     VStack(spacing: h * 0.04) {
-                        Capsule().frame(width: w, height: h * 0.07)
-                        Capsule().frame(width: w, height: h * 0.13)
+                        RoundedRectangle(cornerRadius: w / 2).frame(width: w * 2, height: h * 0.07)
+                        RoundedRectangle(cornerRadius: w / 2).frame(width: w * 2, height: h * 0.13)
                     }
-                    .foregroundStyle(Color(white: 0.4))
-                    .offset(x: w * 0.8, y: h * 0.2)
+                    .foregroundStyle(PhoneFrame.key)
+                    .offset(x: w, y: h * 0.2)
                 }
             }
         }
@@ -372,7 +375,8 @@ struct Phone<Content: View>: View {
 }
 
 enum PhoneFrame {
-    static func bezel(_ size: CGSize) -> CGFloat { min(size.width, size.height) * 0.04 }
+    /// Glass and metal around the screen. Based on the longer side, so both screens of a foldable get the same frame.
+    static func bezel(_ size: CGSize) -> CGFloat { max(size.width, size.height) * 0.013 }
 
     static func outer(_ size: CGSize) -> CGSize {
         CGSize(width: size.width + bezel(size) * 2, height: size.height + bezel(size) * 2)
@@ -383,6 +387,16 @@ enum PhoneFrame {
         let k = frame.width / outer(size).width
         return CGRect(x: bezel(size) * k, y: bezel(size) * k, width: size.width * k, height: size.height * k)
     }
+
+    /// Dark aluminum band, lit from above.
+    static let metal = LinearGradient(stops: [.init(color: Color(white: 0.62), location: 0), .init(color: Color(white: 0.34), location: 0.06),
+                                              .init(color: Color(white: 0.24), location: 0.5), .init(color: Color(white: 0.3), location: 0.94),
+                                              .init(color: Color(white: 0.12), location: 1)], startPoint: .top, endPoint: .bottom)
+    /// Light catching the rounded outer edge.
+    static let chamfer = LinearGradient(colors: [.white.opacity(0.8), .white.opacity(0.1), .white.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    /// Side keys, rounded so their middle catches the light.
+    static let key = LinearGradient(stops: [.init(color: Color(white: 0.16), location: 0), .init(color: Color(white: 0.6), location: 0.7),
+                                            .init(color: Color(white: 0.22), location: 1)], startPoint: .leading, endPoint: .trailing)
 }
 
 /// A display's screen corners, from `dumpsys display`. Android 12 and later report them, in pixels of that display.
