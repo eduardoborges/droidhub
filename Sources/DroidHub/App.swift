@@ -125,6 +125,7 @@ struct DeviceView: View {
     @State private var failure: String?
     @State private var attempt = 0
     @State private var hingeAngle: Double?
+    @State private var corners: [ScreenCorner] = []
 
     var body: some View {
         content
@@ -160,7 +161,7 @@ struct DeviceView: View {
     @ViewBuilder private var content: some View {
         if let serial = device.serial {
             let bend = device.hinge.map { $0.bend(angle: hingeAngle ?? 180, video: size) }
-            Phone(size: size, bend: bend) { half in
+            Phone(size: size, radius: corners.radius(for: size), bend: bend) { half in
                 if let mirror {
                     VideoLayer(layer: half == 1 ? mirror.twin ?? mirror.layer : mirror.layer)
                 } else {
@@ -185,6 +186,7 @@ struct DeviceView: View {
                 if let mirror { controls(mirror) }
             }
             .task(id: "\(serial)#\(attempt)") { await connect(serial) }
+            .task(id: serial) { corners = ScreenCorner.parse(await adb("-s", serial, "shell", "dumpsys display | grep DisplayDeviceInfo")) }
         } else if hub.booting.contains(device.id) {
             ProgressView("Booting \(device.name)…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -314,6 +316,8 @@ struct HingeControls: View {
 /// Device frame drawn around the screen, sized from the video's pixel dimensions.
 struct Phone<Content: View>: View {
     let size: CGSize
+    /// Screen corner radius, in video pixels.
+    let radius: CGFloat
     /// Set for foldables, which draw each half of the frame on its own.
     var bend: Bend?
     /// The screen for half `i`. A phone that doesn't fold only asks for half 0.
@@ -337,12 +341,11 @@ struct Phone<Content: View>: View {
     }
 
     private func shell(_ screen: some View) -> some View {
-        let short = min(size.width, size.height)
         let bezel = PhoneFrame.bezel(size)
         return GeometryReader { geo in
             let k = geo.size.width / PhoneFrame.outer(size).width
-            let radius = short * 0.1 * k
-            let shell = RoundedRectangle(cornerRadius: radius + bezel * k, style: .continuous)
+            let r = radius * k
+            let shell = RoundedRectangle(cornerRadius: r + bezel * k, style: .continuous)
             ZStack {
                 shell.fill(.black)
                 shell.strokeBorder(
@@ -351,7 +354,7 @@ struct Phone<Content: View>: View {
                 )
                 screen
                     .frame(width: size.width * k, height: size.height * k)
-                    .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: r, style: .continuous))
             }
             .overlay(alignment: .topTrailing) {
                 if size.height > size.width {  // power and volume keys, right edge, portrait only
@@ -379,6 +382,31 @@ enum PhoneFrame {
     static func screen(video size: CGSize, in frame: CGSize) -> CGRect {
         let k = frame.width / outer(size).width
         return CGRect(x: bezel(size) * k, y: bezel(size) * k, width: size.width * k, height: size.height * k)
+    }
+}
+
+/// A display's screen corners, from `dumpsys display`. Android 12 and later report them, in pixels of that display.
+struct ScreenCorner: Equatable {
+    let size: CGSize
+    let radius: CGFloat
+
+    static func parse(_ dump: String) -> [ScreenCorner] {
+        dump.split(separator: "\n").compactMap { line in
+            guard let s = line.firstMatch(of: #/, (\d+) x (\d+),/#), let r = line.firstMatch(of: #/RoundedCorner\{[^}]*radius=(\d+)/#),
+                  let w = Double(s.1), let h = Double(s.2), let radius = Double(r.1) else { return nil }
+            return ScreenCorner(size: CGSize(width: w, height: h), radius: radius)
+        }
+    }
+}
+
+extension [ScreenCorner] {
+    /// Corner radius for a video of `size`, scaled from the display with the same shape. scrcpy may shrink the video, so this matches on shape, not size.
+    func radius(for size: CGSize) -> CGFloat {
+        func shape(_ s: CGSize) -> CGFloat { Swift.min(s.width, s.height) / Swift.max(s.width, s.height) }
+        let off = { (c: ScreenCorner) in abs(shape(c.size) - shape(size)) }
+        // A guess close to a Pixel's, for Android 11 and older.
+        guard let match = filter({ off($0) < 0.02 }).min(by: { off($0) < off($1) }) else { return Swift.max(size.width, size.height) * 0.045 }
+        return match.radius * Swift.min(size.width, size.height) / Swift.min(match.size.width, match.size.height)
     }
 }
 
