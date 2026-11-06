@@ -215,6 +215,21 @@ struct DeviceView: View {
                 .keyboardShortcut(.rightArrow)
                 .padding(4)
                 .glassEffect(in: .circle)
+            if !device.postures.isEmpty {
+                Menu {
+                    ForEach(device.postures) { p in Button(p.title) { hub.fold(device, to: p) } }
+                } label: {
+                    Image(systemName: "rectangle.split.2x1").font(.system(size: 14, weight: .medium)).frame(width: 30, height: 30).contentShape(.rect)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Posture")
+                .accessibilityLabel("Posture")
+                .padding(4)
+                .glassEffect(in: .circle)
+            }
         }
         .padding(.bottom, 16)
     }

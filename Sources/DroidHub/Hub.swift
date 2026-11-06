@@ -9,9 +9,32 @@ struct Device: Identifiable, Hashable {
     var release = ""
     var api = ""
     var avd: String?
+    /// Postures the emulator's hinge can take. Empty when it doesn't fold.
+    var postures: [Posture] = []
     /// Set once the device is online and booted.
     var serial: String?
     var isEmulator: Bool { avd != nil }
+}
+
+/// Postures the emulator console's `posture` command takes. Android Studio's Extended Controls offer the same list.
+enum Posture: Int, Identifiable {
+    case closed = 1, halfOpen, open, flipped, tent
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .closed: "Closed"
+        case .halfOpen: "Half Open"
+        case .open: "Open"
+        case .flipped: "Flipped"
+        case .tent: "Tent"
+        }
+    }
+
+    static func list(_ value: String) -> [Posture] {
+        value.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)).flatMap(Posture.init) }
+    }
 }
 
 enum SDK {
@@ -153,6 +176,12 @@ final class Hub {
         }
     }
 
+    /// Moves the hinge through the emulator console, like Android Studio's posture control, so apps see the hinge angle change along with the screen.
+    func fold(_ device: Device, to posture: Posture) {
+        guard let serial = device.serial else { return }
+        Task { await adb("-s", serial, "emu", "posture", "\(posture.rawValue)") }
+    }
+
     /// Saves to the Desktop and copies to the clipboard, like Simulator.
     func screenshot(_ device: Device) async {
         guard let serial = device.serial else { return }
@@ -181,7 +210,9 @@ final class Hub {
             let config = ini(SDK.avdHome.appending(path: "\(avd).avd/config.ini"))
             let sysdir = config["image.sysdir.1"] ?? ""
             let api = sysdir.range(of: #"android-\d+"#, options: .regularExpression).map { "API " + sysdir[$0].dropFirst(8) } ?? ""
-            return Device(id: "avd:\(avd)", name: config["avd.ini.displayname"] ?? avd.replacingOccurrences(of: "_", with: " "), detail: "Emulator", api: api, avd: avd)
+            let postures = config["hw.sensor.hinge"] == "yes" ? Posture.list(config["hw.sensor.posture_list"] ?? "") : []
+            return Device(id: "avd:\(avd)", name: config["avd.ini.displayname"] ?? avd.replacingOccurrences(of: "_", with: " "), detail: "Emulator",
+                          api: api, avd: avd, postures: postures)
         }
     }
 

@@ -90,10 +90,13 @@ import Testing
         "hw.lcd.width": "2076", "hw.lcd.height": "2152",
     ]
     for (key, value) in expected { #expect(config[key] == value, "\(key)") }
+    #expect(Posture.list(config["hw.sensor.posture_list"] ?? "") == [.closed, .halfOpen, .open])
 }
 
 @Test func phonesHaveNoHinge() throws {
     let xml = "<d:device xmlns:d=\"x\"><d:name>Pixel 10</d:name><d:id>pixel_10</d:id><d:pixel-density>420dpi</d:pixel-density><d:x-dimension>1080</d:x-dimension><d:y-dimension>2424</d:y-dimension></d:device>"
     let profile = try #require(try XMLDocument(data: Data(xml.utf8)).rootElement().flatMap(DeviceProfile.init))
     #expect(profile.hinge.isEmpty)
+    #expect(Posture.list("3, 4") == [.open, .flipped])
+    #expect(Posture.list("") == [])
 }
