@@ -52,6 +52,10 @@ struct Hinge: Hashable {
     let postures: [Posture]
     /// Hinge angles each posture covers, in the same order as `postures`.
     let angles: [ClosedRange<Double>]
+    /// Size of the screen that folds, in pixels.
+    let display: CGSize
+    /// True when the hinge runs top to bottom in the natural orientation.
+    let vertical: Bool
 
     init?(config: [String: String]) {
         guard config["hw.sensor.hinge"] == "yes",
@@ -64,6 +68,10 @@ struct Hinge: Hashable {
         self.range = range
         self.postures = postures
         self.angles = angles.count == postures.count ? angles : []
+        display = CGSize(width: Double(config["hw.lcd.width"] ?? "") ?? 0, height: Double(config["hw.lcd.height"] ?? "") ?? 0)
+        // x-y-width-height of the first hinge
+        let area = (config["hw.sensor.hinge.areas"] ?? "").split(separator: ",").first?.split(separator: "-").compactMap { Double($0) } ?? []
+        vertical = area.count == 4 ? area[2] < area[3] : true
     }
 
     func posture(at angle: Double) -> Posture? {

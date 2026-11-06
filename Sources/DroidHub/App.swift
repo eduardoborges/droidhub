@@ -159,9 +159,10 @@ struct DeviceView: View {
 
     @ViewBuilder private var content: some View {
         if let serial = device.serial {
-            Phone(size: size) {
+            let bend = device.hinge.map { $0.bend(angle: hingeAngle ?? 180, video: size) }
+            Phone(size: size, bend: bend) { half in
                 if let mirror {
-                    Screen(mirror: mirror)
+                    VideoLayer(layer: half == 1 ? mirror.twin ?? mirror.layer : mirror.layer)
                 } else {
                     Color.black.overlay {
                         if let failure {
@@ -176,6 +177,8 @@ struct DeviceView: View {
                     }
                 }
             }
+            .overlay { if let mirror { Screen(mirror: mirror, bend: bend ?? .flat) } }
+            .animation(.smooth(duration: 0.25), value: bend)
             .padding(32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom) {
@@ -230,7 +233,7 @@ struct DeviceView: View {
     private func connect(_ serial: String) async {
         mirror = nil
         failure = nil
-        let m = Mirror(serial: serial)
+        let m = Mirror(serial: serial, twin: device.hinge != nil)
         m.onSize = { size = $0 }
         m.onClose = { [weak m] in
             m?.stop()  // frees the server and the adb forward now, not at the next Retry
@@ -311,14 +314,33 @@ struct HingeControls: View {
 /// Device frame drawn around the screen, sized from the video's pixel dimensions.
 struct Phone<Content: View>: View {
     let size: CGSize
-    @ViewBuilder let content: Content
+    /// Set for foldables, which draw each half of the frame on its own.
+    var bend: Bend?
+    /// The screen for half `i`. A phone that doesn't fold only asks for half 0.
+    @ViewBuilder let content: (Int) -> Content
 
     var body: some View {
+        Group {
+            if let bend {
+                ZStack {
+                    ForEach(0..<2, id: \.self) { i in
+                        shell(content(i))
+                            .clipShape(HalfShape(half: i, vertical: bend.vertical))
+                            .modifier(FoldEffect(bend: bend, half: i))
+                    }
+                }
+            } else {
+                shell(content(0))
+            }
+        }
+        .aspectRatio(PhoneFrame.outer(size), contentMode: .fit)
+    }
+
+    private func shell(_ screen: some View) -> some View {
         let short = min(size.width, size.height)
-        let bezel = short * 0.04
-        let outer = CGSize(width: size.width + bezel * 2, height: size.height + bezel * 2)
-        GeometryReader { geo in
-            let k = geo.size.width / outer.width
+        let bezel = PhoneFrame.bezel(size)
+        return GeometryReader { geo in
+            let k = geo.size.width / PhoneFrame.outer(size).width
             let radius = short * 0.1 * k
             let shell = RoundedRectangle(cornerRadius: radius + bezel * k, style: .continuous)
             ZStack {
@@ -327,7 +349,7 @@ struct Phone<Content: View>: View {
                     LinearGradient(colors: [Color(white: 0.6), Color(white: 0.28), Color(white: 0.5)], startPoint: .topLeading, endPoint: .bottomTrailing),
                     lineWidth: max(2, bezel * k * 0.3)
                 )
-                content
+                screen
                     .frame(width: size.width * k, height: size.height * k)
                     .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             }
@@ -343,20 +365,73 @@ struct Phone<Content: View>: View {
                 }
             }
         }
-        .aspectRatio(outer, contentMode: .fit)
     }
+}
+
+enum PhoneFrame {
+    static func bezel(_ size: CGSize) -> CGFloat { min(size.width, size.height) * 0.04 }
+
+    static func outer(_ size: CGSize) -> CGSize {
+        CGSize(width: size.width + bezel(size) * 2, height: size.height + bezel(size) * 2)
+    }
+
+    /// Where the screen sits in a frame of `frame` points.
+    static func screen(video size: CGSize, in frame: CGSize) -> CGRect {
+        let k = frame.width / outer(size).width
+        return CGRect(x: bezel(size) * k, y: bezel(size) * k, width: size.width * k, height: size.height * k)
+    }
+}
+
+/// Hosts one of the mirror's video layers. The ScreenView on top takes the input.
+struct VideoLayer: NSViewRepresentable {
+    let layer: CALayer
+    func makeNSView(context: Context) -> LayerHost { LayerHost(hosted: layer) }
+    func updateNSView(_ view: LayerHost, context: Context) { view.hosted = layer }
+}
+
+final class LayerHost: NSView {
+    var hosted: CALayer {
+        didSet {
+            guard hosted !== oldValue else { return }
+            oldValue.removeFromSuperlayer()
+            layer?.addSublayer(hosted)
+            needsLayout = true
+        }
+    }
+
+    init(hosted: CALayer) {
+        self.hosted = hosted
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.addSublayer(hosted)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        hosted.frame = bounds
+        CATransaction.commit()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 struct Screen: NSViewRepresentable {
     let mirror: Mirror
+    var bend = Bend.flat
     func makeNSView(context: Context) -> ScreenView { ScreenView(mirror: mirror) }
-    func updateNSView(_ view: ScreenView, context: Context) {}
+    func updateNSView(_ view: ScreenView, context: Context) { view.bend = bend }
 }
 
-/// Hosts the video layer and turns mouse and keyboard input into Android events.
+/// Covers the device frame and turns mouse and keyboard input into Android events.
 final class ScreenView: NSView {
     private let mirror: Mirror
+    var bend = Bend.flat
     private var marked: String?
+    private var touching = false
     private static let ctrl: UInt32 = 0x3000  // META_CTRL_ON | META_CTRL_LEFT_ON
     private static let commands: [Selector: (UInt32, UInt32)] = [
         #selector(NSResponder.deleteBackward(_:)): (67, 0),
@@ -377,8 +452,6 @@ final class ScreenView: NSView {
     init(mirror: Mirror) {
         self.mirror = mirror
         super.init(frame: .zero)
-        wantsLayer = true
-        layer?.addSublayer(mirror.layer)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Device screen")
@@ -394,32 +467,38 @@ final class ScreenView: NSView {
         DispatchQueue.main.async { self.window?.makeFirstResponder(self) }
     }
 
-    override func layout() {
-        super.layout()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        mirror.layer.frame = bounds
-        CATransaction.commit()
-    }
+    private var screen: CGRect { PhoneFrame.screen(video: mirror.size, in: bounds.size) }
 
+    /// Mouse position on the screen, 0...1 on each axis.
     private func point(_ event: NSEvent) -> CGPoint {
-        let p = convert(event.locationInWindow, from: nil)
-        return CGPoint(x: p.x / bounds.width, y: p.y / bounds.height)
+        // Clicks land on the bent frame, so they get mapped back onto the flat screen first.
+        let p = bend.unproject(convert(event.locationInWindow, from: nil), size: bounds.size)
+        return CGPoint(x: (p.x - screen.minX) / screen.width, y: (p.y - screen.minY) / screen.height)
     }
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        mirror.touch(0, at: point(event))
+        let p = point(event)
+        // A click on the bezel isn't a touch.
+        guard (0...1).contains(p.x), (0...1).contains(p.y) else { return }
+        touching = true
+        mirror.touch(0, at: p)
     }
 
-    override func mouseDragged(with event: NSEvent) { mirror.touch(2, at: point(event)) }
-    override func mouseUp(with event: NSEvent) { mirror.touch(1, at: point(event)) }
+    override func mouseDragged(with event: NSEvent) {
+        if touching { mirror.touch(2, at: point(event)) }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if touching { mirror.touch(1, at: point(event)) }
+        touching = false
+    }
     override func rightMouseDown(with event: NSEvent) { mirror.key(4) }
 
     override func scrollWheel(with event: NSEvent) {
         // Trackpads report points and wheels report notches. Converting points at the
         // current zoom keeps the content under the fingers.
-        let k = event.hasPreciseScrollingDeltas ? 1 / mirror.pointsPerNotch(viewWidth: bounds.width) : 1
+        let k = event.hasPreciseScrollingDeltas ? 1 / mirror.pointsPerNotch(viewWidth: screen.width) : 1
         mirror.scroll(at: point(event), dx: Float(-event.scrollingDeltaX * k), dy: Float(event.scrollingDeltaY * k))
     }
 

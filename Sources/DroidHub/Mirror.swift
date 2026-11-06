@@ -11,6 +11,8 @@ struct MirrorError: Error, CustomStringConvertible {
 final class Mirror {
     let serial: String
     let layer = AVSampleBufferDisplayLayer()
+    /// Second video layer for the other half of a foldable's bent frame. It decodes the same stream.
+    let twin: AVSampleBufferDisplayLayer?
     var onSize: ((CGSize) -> Void)?
     var onClose: (() -> Void)?
     /// Current video size in device pixels. Main thread only.
@@ -26,10 +28,13 @@ final class Mirror {
     private var density = 420.0
     private let writes = DispatchQueue(label: "droidhub.control")
 
-    init(serial: String) {
+    init(serial: String, twin: Bool = false) {
         self.serial = serial
-        layer.videoGravity = .resizeAspect
-        layer.backgroundColor = .black
+        self.twin = twin ? AVSampleBufferDisplayLayer() : nil
+        for layer in [layer, self.twin].compactMap({ $0 }) {
+            layer.videoGravity = .resizeAspect
+            layer.backgroundColor = .black
+        }
     }
 
     func start() async throws {
@@ -171,9 +176,11 @@ final class Mirror {
                 continue
             }
             guard let format, let sample = H264.sample(packet, format: format) else { continue }
-            let renderer = layer.sampleBufferRenderer
-            if renderer.status == .failed { renderer.flush() }
-            renderer.enqueue(sample)
+            for layer in [layer, twin].compactMap({ $0 }) {
+                let renderer = layer.sampleBufferRenderer
+                if renderer.status == .failed { renderer.flush() }
+                renderer.enqueue(sample)
+            }
         }
     }
 
