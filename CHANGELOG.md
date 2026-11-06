@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0](https://github.com/eduardoborges/droidhub/compare/v0.3.0...v0.4.0) (2026-11-06)
+
+
+### Features
+
+* show the sides of a foldable as it bends ([d874f84](https://github.com/eduardoborges/droidhub/commit/d874f8480e7d69581c2fe4219bc7c65454997d14))
+* take the screen corner radius from the device ([b94db2e](https://github.com/eduardoborges/droidhub/commit/b94db2efa62de14e800d644df6d4faf6573fb834))
+* thinner bezel with a rounded metal band ([84225e1](https://github.com/eduardoborges/droidhub/commit/84225e18db1ff65225f76ff36ded03d1522fdfbb))
+
 ## [0.3.0](https://github.com/eduardoborges/droidhub/compare/v0.2.0...v0.3.0) (2026-11-06)
 
 
