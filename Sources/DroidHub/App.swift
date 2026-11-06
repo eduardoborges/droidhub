@@ -124,6 +124,7 @@ struct DeviceView: View {
     @State private var size = CGSize(width: 1080, height: 2400)
     @State private var failure: String?
     @State private var attempt = 0
+    @State private var hingeAngle: Double?
 
     var body: some View {
         content
@@ -211,36 +212,19 @@ struct DeviceView: View {
                 .keyboardShortcut("s")
                 .padding(4)
                 .glassEffect(in: .circle)
-            bar("Rotate", "rotate.right") { hub.rotate(device) }
-                .keyboardShortcut(.rightArrow)
-                .padding(4)
-                .glassEffect(in: .circle)
-            if !device.postures.isEmpty {
-                Menu {
-                    ForEach(device.postures) { p in Button(p.title) { hub.fold(device, to: p) } }
-                } label: {
-                    Image(systemName: "rectangle.split.2x1").font(.system(size: 14, weight: .medium)).frame(width: 30, height: 30).contentShape(.rect)
-                }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("Posture")
-                .accessibilityLabel("Posture")
-                .padding(4)
-                .glassEffect(in: .circle)
+            HStack(spacing: 2) {
+                bar("Rotate", "rotate.right") { hub.rotate(device) }
+                    .keyboardShortcut(.rightArrow)
+                if let hinge = device.hinge { HingeControls(device: device, hinge: hinge, angle: $hingeAngle) }
             }
+            .padding(4)
+            .glassEffect(in: .capsule)
         }
         .padding(.bottom, 16)
     }
 
     private func bar(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon).font(.system(size: 14, weight: .medium)).frame(width: 30, height: 30).contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .help(title)
-        .accessibilityLabel(title)
+        BarButton(title: title, icon: icon, action: action)
     }
 
     private func connect(_ serial: String) async {
@@ -263,6 +247,64 @@ struct DeviceView: View {
         mirror = m
         while !Task.isCancelled { try? await Task.sleep(for: .seconds(3600)) }
         m.stop()
+    }
+}
+
+struct BarButton: View {
+    let title: String
+    let icon: String
+    var selected = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 14, weight: .medium)).frame(width: 30, height: 30).contentShape(.rect)
+                .foregroundStyle(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+struct HingeControls: View {
+    @Environment(Hub.self) private var hub
+    let device: Device
+    let hinge: Hinge
+    @Binding var angle: Double?
+    @State private var dragging = false
+
+    var body: some View {
+        let shown = angle ?? hinge.range.upperBound
+        HStack(spacing: 2) {
+            Divider().frame(height: 18).padding(.horizontal, 4)
+            ForEach(hinge.postures) { p in
+                BarButton(title: p.title, icon: p.icon, selected: angle.flatMap(hinge.posture) == p) {
+                    Task {
+                        await hub.fold(device, to: p)
+                        angle = await hub.hingeAngle(device)
+                    }
+                }
+            }
+            Divider().frame(height: 18).padding(.horizontal, 4)
+            Slider(value: Binding(get: { shown }, set: { angle = $0.rounded(); hub.setHinge(device, angle: $0) }), in: hinge.range) { dragging = $0 }
+                .controlSize(.small)
+                .frame(width: 110)
+                .accessibilityLabel("Hinge Angle")
+            Text("\(Int(shown))°")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 34, alignment: .trailing)
+                .padding(.trailing, 6)
+        }
+        .task(id: device.serial) {
+            // Polls so a fold made elsewhere (adb, another tool) shows up here too.
+            while !Task.isCancelled {
+                if let a = await hub.hingeAngle(device), !dragging { angle = a }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
     }
 }
 

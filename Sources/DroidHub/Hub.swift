@@ -9,8 +9,8 @@ struct Device: Identifiable, Hashable {
     var release = ""
     var api = ""
     var avd: String?
-    /// Postures the emulator's hinge can take. Empty when it doesn't fold.
-    var postures: [Posture] = []
+    /// Set for emulators that fold.
+    var hinge: Hinge?
     /// Set once the device is online and booted.
     var serial: String?
     var isEmulator: Bool { avd != nil }
@@ -32,8 +32,57 @@ enum Posture: Int, Identifiable {
         }
     }
 
-    static func list(_ value: String) -> [Posture] {
-        value.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)).flatMap(Posture.init) }
+    var icon: String {
+        // The iPhone Duo symbols need macOS 26.2.
+        let (duo, fallback) = switch self {
+        case .closed: ("iphone.duo", "rectangle.portrait")
+        case .halfOpen: ("iphone.duo.open.partial.landscape", "book")
+        case .open: ("iphone.duo.open.landscape", "rectangle")
+        case .flipped: ("iphone.duo.rear.open.landscape", "rectangle.on.rectangle")
+        case .tent: ("iphone.duo.standing.landscape", "triangle")
+        }
+        return NSImage(systemSymbolName: duo, accessibilityDescription: nil) != nil ? duo : fallback
+    }
+}
+
+/// Hinge of a foldable emulator, read from its config.ini.
+struct Hinge: Hashable {
+    /// Angles the hinge can reach, e.g. 0...180.
+    let range: ClosedRange<Double>
+    let postures: [Posture]
+    /// Hinge angles each posture covers, in the same order as `postures`.
+    let angles: [ClosedRange<Double>]
+
+    init?(config: [String: String]) {
+        guard config["hw.sensor.hinge"] == "yes",
+              let range = config["hw.sensor.hinge.ranges"].flatMap({ Self.ranges($0).first })
+        else { return nil }
+        let postures = (config["hw.sensor.posture_list"] ?? "").split(separator: ",")
+            .compactMap { Int($0.trimmingCharacters(in: .whitespaces)).flatMap(Posture.init) }
+        guard !postures.isEmpty else { return nil }
+        let angles = Self.ranges(config["hw.sensor.hinge_angles_posture_definitions"] ?? "")
+        self.range = range
+        self.postures = postures
+        self.angles = angles.count == postures.count ? angles : []
+    }
+
+    func posture(at angle: Double) -> Posture? {
+        zip(postures, angles).first { $1.contains(angle) }?.0
+    }
+
+    /// "0-30, 30-150, 150-180"
+    static func ranges(_ value: String) -> [ClosedRange<Double>] {
+        value.split(separator: ",").compactMap { part in
+            let ends = part.split(separator: "-").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            return ends.count == 2 && ends[0] <= ends[1] ? ends[0]...ends[1] : nil
+        }
+    }
+
+    /// `emu sensor get hinge-angle0` prints "hinge-angle0 = 180".
+    static func angle(from output: String) -> Double? {
+        output.split(whereSeparator: \.isNewline).lazy
+            .compactMap { $0.split(separator: "=", maxSplits: 1).last?.split(separator: ":").first }
+            .compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }.first
     }
 }
 
@@ -177,9 +226,31 @@ final class Hub {
     }
 
     /// Moves the hinge through the emulator console, like Android Studio's posture control, so apps see the hinge angle change along with the screen.
-    func fold(_ device: Device, to posture: Posture) {
+    func fold(_ device: Device, to posture: Posture) async {
         guard let serial = device.serial else { return }
-        Task { await adb("-s", serial, "emu", "posture", "\(posture.rawValue)") }
+        await adb("-s", serial, "emu", "posture", "\(posture.rawValue)")
+    }
+
+    /// Newest angle still waiting to go out, per serial. A drag runs one adb call at a time and skips the values in between.
+    @ObservationIgnored private var pendingAngle: [String: Int] = [:]
+
+    /// Sets the hinge angle directly, and the emulator picks the posture that covers it.
+    func setHinge(_ device: Device, angle: Double) {
+        guard let serial = device.serial else { return }
+        let idle = pendingAngle[serial] == nil
+        pendingAngle[serial] = Int(angle.rounded())
+        guard idle else { return }
+        Task {
+            while let angle = pendingAngle[serial] {
+                await adb("-s", serial, "emu", "sensor", "set", "hinge-angle0", "\(angle)")
+                if pendingAngle[serial] == angle { pendingAngle[serial] = nil }
+            }
+        }
+    }
+
+    func hingeAngle(_ device: Device) async -> Double? {
+        guard let serial = device.serial else { return nil }
+        return Hinge.angle(from: await adb("-s", serial, "emu", "sensor", "get", "hinge-angle0"))
     }
 
     /// Saves to the Desktop and copies to the clipboard, like Simulator.
@@ -210,9 +281,8 @@ final class Hub {
             let config = ini(SDK.avdHome.appending(path: "\(avd).avd/config.ini"))
             let sysdir = config["image.sysdir.1"] ?? ""
             let api = sysdir.range(of: #"android-\d+"#, options: .regularExpression).map { "API " + sysdir[$0].dropFirst(8) } ?? ""
-            let postures = config["hw.sensor.hinge"] == "yes" ? Posture.list(config["hw.sensor.posture_list"] ?? "") : []
             return Device(id: "avd:\(avd)", name: config["avd.ini.displayname"] ?? avd.replacingOccurrences(of: "_", with: " "), detail: "Emulator",
-                          api: api, avd: avd, postures: postures)
+                          api: api, avd: avd, hinge: Hinge(config: config))
         }
     }
 

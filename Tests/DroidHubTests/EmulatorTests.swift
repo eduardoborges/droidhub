@@ -90,13 +90,21 @@ import Testing
         "hw.lcd.width": "2076", "hw.lcd.height": "2152",
     ]
     for (key, value) in expected { #expect(config[key] == value, "\(key)") }
-    #expect(Posture.list(config["hw.sensor.posture_list"] ?? "") == [.closed, .halfOpen, .open])
+    let hinge = try #require(Hinge(config: config))
+    #expect(hinge.range == 0...180)
+    #expect(hinge.postures == [.closed, .halfOpen, .open])
+    #expect([0, 30, 90, 150, 180].map(hinge.posture) == [.closed, .closed, .halfOpen, .halfOpen, .open])
 }
 
 @Test func phonesHaveNoHinge() throws {
     let xml = "<d:device xmlns:d=\"x\"><d:name>Pixel 10</d:name><d:id>pixel_10</d:id><d:pixel-density>420dpi</d:pixel-density><d:x-dimension>1080</d:x-dimension><d:y-dimension>2424</d:y-dimension></d:device>"
     let profile = try #require(try XMLDocument(data: Data(xml.utf8)).rootElement().flatMap(DeviceProfile.init))
     #expect(profile.hinge.isEmpty)
-    #expect(Posture.list("3, 4") == [.open, .flipped])
-    #expect(Posture.list("") == [])
+    #expect(Hinge(config: ["hw.sensor.hinge": "no", "hw.sensor.hinge.ranges": "0-180", "hw.sensor.posture_list": "1, 2, 3"]) == nil)
+    // 8" Fold-out
+    let out = try #require(Hinge(config: ["hw.sensor.hinge": "yes", "hw.sensor.hinge.ranges": "180-360", "hw.sensor.posture_list": "3, 4",
+                                          "hw.sensor.hinge_angles_posture_definitions": "180-330, 330-360"]))
+    #expect(out.postures == [.open, .flipped] && out.posture(at: 340) == .flipped)
+    #expect(Hinge.angle(from: "hinge-angle0 = 90\nOK\n") == 90)
+    #expect(Hinge.angle(from: "KO: bad sensor") == nil)
 }
