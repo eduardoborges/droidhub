@@ -37,3 +37,19 @@ import Testing
     #expect(hinge.bend(angle: 10, video: CGSize(width: 2076, height: 2152)).angle == 60)
     #expect(hinge.bend(angle: 0, video: CGSize(width: 1080, height: 2364)).angle == 0)
 }
+
+@Test func sidesShowPastTheOuterEdges() {
+    let size = CGSize(width: 400, height: 400), depth = 14.0
+    for vertical in [true, false] {
+        let bend = Bend(angle: 45, vertical: vertical)
+        for i in 0..<2 {
+            let front = bend.transform(half: i, size: size), back = bend.transform(half: i, size: size, depth: depth)
+            let outer = vertical ? CGPoint(x: i == 0 ? 0 : 400, y: 200) : CGPoint(x: 200, y: i == 0 ? 0 : 400)
+            let f = outer.applying(front), b = outer.applying(back)
+            let out = (vertical ? b.x - f.x : b.y - f.y) * (i == 0 ? -1 : 1)
+            #expect(out > depth * 0.5 && out < depth, "\(vertical) \(i): \(out)")
+            let hinge = CGPoint(x: 200, y: 200), h = hinge.applying(back), hf = hinge.applying(front)
+            #expect((vertical ? h.x - hf.x : h.y - hf.y) * (i == 0 ? -1 : 1) > 0, "hidden behind its own half at the hinge, \(vertical) \(i)")
+        }
+    }
+}

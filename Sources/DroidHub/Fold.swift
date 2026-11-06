@@ -9,9 +9,12 @@ struct Bend: Equatable {
     static let flat = Bend(angle: 0, vertical: true)
     /// Camera distance in multiples of the frame's longer side. A bigger value looks flatter.
     static let distance = 3.0
+    /// Thickness of the open device over its width across the hinge: 5.2 mm over 155.2 mm on a Pixel 10 Pro Fold.
+    static let depth = 0.034
 
     /// Projection for half `i` (0 is the left or top one), in the frame's own coordinates. It shrinks the frame so the edges that come closer still fit.
-    func transform(half i: Int, size: CGSize) -> ProjectionTransform {
+    /// `depth` pushes the half that many points behind the screen, to draw the device's sides.
+    func transform(half i: Int, size: CGSize, depth: CGFloat = 0) -> ProjectionTransform {
         let theta = angle * .pi / 180
         let d = Self.distance * max(size.width, size.height)
         let reach = (vertical ? size.width : size.height) / 2
@@ -20,7 +23,7 @@ struct Bend: Equatable {
         let turn = vertical ? CATransform3DMakeRotation(i == 0 ? theta : -theta, 0, 1, 0) : CATransform3DMakeRotation(i == 0 ? -theta : theta, 1, 0, 0)
         var perspective = CATransform3DIdentity
         perspective.m34 = -1 / d
-        let steps = [CATransform3DMakeTranslation(-size.width / 2, -size.height / 2, 0), turn, perspective,
+        let steps = [CATransform3DMakeTranslation(-size.width / 2, -size.height / 2, -depth), turn, perspective,
                      CATransform3DMakeScale(scale, scale, 1), CATransform3DMakeTranslation(size.width / 2, size.height / 2, 0)]
         return ProjectionTransform(steps.dropFirst().reduce(steps[0], CATransform3DConcat))
     }
@@ -58,13 +61,17 @@ struct HalfShape: Shape {
 struct FoldEffect: GeometryEffect {
     var bend: Bend
     let half: Int
+    /// How far behind the screen, as a share of the device's thickness.
+    var behind = 0.0
 
     var animatableData: Double {
         get { bend.angle }
         set { bend.angle = newValue }
     }
 
-    func effectValue(size: CGSize) -> ProjectionTransform { bend.transform(half: half, size: size) }
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        bend.transform(half: half, size: size, depth: behind * Bend.depth * (bend.vertical ? size.width : size.height))
+    }
 }
 
 extension Hinge {

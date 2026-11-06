@@ -327,8 +327,19 @@ struct Phone<Content: View>: View {
         Group {
             if let bend {
                 ZStack {
+                    // The device's sides are copies of the frame stacked behind each half. They show past the outer edges as the halves turn.
                     ForEach(0..<2, id: \.self) { i in
-                        shell(content(i))
+                        ForEach((1...Self.layers).reversed(), id: \.self) { n in
+                            let f = Double(n) / Double(Self.layers)
+                            layer(Color(white: (i == 0 ? 0.48 : 0.36) - 0.26 * f), shadow: n == Self.layers)
+                                .clipShape(HalfShape(half: i, vertical: bend.vertical))
+                                .modifier(FoldEffect(bend: bend, half: i, behind: f))
+                        }
+                    }
+                    ForEach(0..<2, id: \.self) { i in
+                        // Light comes from the top left, so the half turning away from it darkens and the other gets a little brighter.
+                        let light = sin(bend.angle * .pi / 180) * (i == 0 ? 1 : -1)
+                        shell(content(i), shadow: false, shade: light > 0 ? .black.opacity(light * 0.22) : .white.opacity(-light * 0.06))
                             .clipShape(HalfShape(half: i, vertical: bend.vertical))
                             .modifier(FoldEffect(bend: bend, half: i))
                     }
@@ -340,7 +351,10 @@ struct Phone<Content: View>: View {
         .aspectRatio(PhoneFrame.outer(size), contentMode: .fit)
     }
 
-    private func shell(_ screen: some View) -> some View {
+    /// Enough copies that the steps between them blend into one side.
+    private static var layers: Int { 12 }
+
+    private func shell(_ screen: some View, shadow: Bool = true, shade: Color = .clear) -> some View {
         GeometryReader { geo in
             let k = geo.size.width / PhoneFrame.outer(size).width
             let bezel = PhoneFrame.bezel(size) * k, rim = max(2, bezel * 0.5), r = radius * k
@@ -348,7 +362,7 @@ struct Phone<Content: View>: View {
             let glass = RoundedRectangle(cornerRadius: r + bezel - rim, style: .continuous)
             ZStack {
                 body.fill(PhoneFrame.metal)
-                    .shadow(color: .black.opacity(0.45), radius: bezel * 1.2, y: bezel * 0.6)
+                    .shadow(color: .black.opacity(shadow ? 0.45 : 0), radius: bezel * 1.2, y: bezel * 0.6)
                 // The band is rounded, so its outer lip falls into shadow and the top of the curve catches a line of light.
                 body.strokeBorder(.black.opacity(0.55), lineWidth: rim * 0.2)
                 body.inset(by: rim * 0.22).strokeBorder(PhoneFrame.chamfer, lineWidth: max(0.75, rim * 0.28))
@@ -358,6 +372,7 @@ struct Phone<Content: View>: View {
                 screen
                     .frame(width: size.width * k, height: size.height * k)
                     .clipShape(RoundedRectangle(cornerRadius: r, style: .continuous))
+                body.fill(shade).allowsHitTesting(false)
             }
             .background(alignment: .topTrailing) {
                 if size.height > size.width {  // power and volume keys, right edge, portrait only
@@ -371,6 +386,17 @@ struct Phone<Content: View>: View {
                 }
             }
         }
+    }
+
+    /// The frame's outline in one flat color, for the sides.
+    private func layer(_ color: Color, shadow: Bool) -> some View {
+        GeometryReader { geo in
+            let k = geo.size.width / PhoneFrame.outer(size).width
+            RoundedRectangle(cornerRadius: (radius + PhoneFrame.bezel(size)) * k, style: .continuous)
+                .fill(color)
+                .shadow(color: .black.opacity(shadow ? 0.45 : 0), radius: PhoneFrame.bezel(size) * k * 1.2, y: PhoneFrame.bezel(size) * k * 0.6)
+        }
+        .allowsHitTesting(false)
     }
 }
 
