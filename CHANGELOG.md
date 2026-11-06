@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/eduardoborges/droidhub/compare/v0.2.0...v0.3.0) (2026-11-06)
+
+
+### Features
+
+* bend the frame of a half-open foldable ([7f5b5cf](https://github.com/eduardoborges/droidhub/commit/7f5b5cfc4b9a1526d33944db82a5749ddf564fc6))
+* posture button for foldable emulators ([4a75586](https://github.com/eduardoborges/droidhub/commit/4a75586be6f47c46cc40cc4bbc8cc1c37c16e8b1))
+* posture buttons and a hinge slider next to Rotate ([2f7cffa](https://github.com/eduardoborges/droidhub/commit/2f7cffa125e1a0d8a03af27dcd10afb8242c1230))
+
+
+### Bug Fixes
+
+* create foldable emulators with their hinge ([182c1c9](https://github.com/eduardoborges/droidhub/commit/182c1c92cffd871bf6ad763e89f2346c22ece2f5))
+
 ## [0.2.0](https://github.com/eduardoborges/droidhub/compare/v0.1.1...v0.2.0) (2026-09-14)
 
 
