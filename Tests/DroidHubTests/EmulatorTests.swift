@@ -45,3 +45,55 @@ import Testing
         #expect(config.contains(line + "\n"), "missing \(line)")
     }
 }
+
+// Pixel 10 Pro Fold, trimmed from Android Studio's sdklib nexus.xml.
+@Test func writesHingeForFoldables() throws {
+    let xml = """
+    <d:device xmlns:d="http://schemas.android.com/sdk/devices/7">
+      <d:name>Pixel 10 Pro Fold</d:name>
+      <d:id>pixel_10_pro_fold</d:id>
+      <d:hardware>
+        <d:screen>
+          <d:pixel-density>390dpi</d:pixel-density>
+          <d:dimensions><d:x-dimension>2076</d:x-dimension><d:y-dimension>2152</d:y-dimension></d:dimensions>
+          <d:foldable-region>
+            <d:x-folded-offset>0</d:x-folded-offset><d:y-folded-offset>0</d:y-folded-offset>
+            <d:x-folded-dimension>1080</d:x-folded-dimension><d:y-folded-dimension>2364</d:y-folded-dimension>
+          </d:foldable-region>
+        </d:screen>
+        <d:hinge>
+          <d:count>1</d:count><d:type>1</d:type><d:sub-type>1</d:sub-type><d:ranges>0-180</d:ranges><d:defaults>180</d:defaults>
+          <d:areas>1038-0-0-2152</d:areas><d:change-orientation-on-fold>1</d:change-orientation-on-fold>
+          <d:posture-list>1, 2, 3</d:posture-list>
+          <d:hinge-angles-posture-definitions>0-30, 30-150, 150-180</d:hinge-angles-posture-definitions>
+        </d:hinge>
+      </d:hardware>
+    </d:device>
+    """
+    let profile = try #require(try XMLDocument(data: Data(xml.utf8)).rootElement().flatMap(DeviceProfile.init))
+    let image = SystemImage(id: "system-images/android-37.2/google_apis/arm64-v8a/", target: "android-37.2", api: "37.2",
+                            abi: "arm64-v8a", tagIDs: "google_apis", tagDisplays: "Google APIs")
+    let lines = AVD.config(name: "Fold", device: profile, image: image, skinPath: nil).split(separator: "\n")
+    // Traps if a key is written twice.
+    let config = Dictionary(uniqueKeysWithValues: lines.map { line in
+        let kv = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+        return (String(kv[0]), String(kv[1]))
+    })
+    // What Android Studio wrote for the same profile.
+    let expected = [
+        "hw.sensor.hinge": "yes", "hw.sensor.hinge.count": "1", "hw.sensor.hinge.type": "1", "hw.sensor.hinge.sub_type": "1",
+        "hw.sensor.hinge.ranges": "0-180", "hw.sensor.hinge.defaults": "180", "hw.sensor.hinge.areas": "1038-0-0-2152",
+        "hw.sensor.posture_list": "1, 2, 3", "hw.sensor.hinge_angles_posture_definitions": "0-30, 30-150, 150-180",
+        "hw.sensor.hinge.fold_to_displayRegion.0.1_at_posture": "1",
+        "hw.displayRegion.0.1.xOffset": "0", "hw.displayRegion.0.1.yOffset": "0",
+        "hw.displayRegion.0.1.width": "1080", "hw.displayRegion.0.1.height": "2364",
+        "hw.lcd.width": "2076", "hw.lcd.height": "2152",
+    ]
+    for (key, value) in expected { #expect(config[key] == value, "\(key)") }
+}
+
+@Test func phonesHaveNoHinge() throws {
+    let xml = "<d:device xmlns:d=\"x\"><d:name>Pixel 10</d:name><d:id>pixel_10</d:id><d:pixel-density>420dpi</d:pixel-density><d:x-dimension>1080</d:x-dimension><d:y-dimension>2424</d:y-dimension></d:device>"
+    let profile = try #require(try XMLDocument(data: Data(xml.utf8)).rootElement().flatMap(DeviceProfile.init))
+    #expect(profile.hinge.isEmpty)
+}

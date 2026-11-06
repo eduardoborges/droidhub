@@ -11,6 +11,18 @@ struct DeviceProfile: Identifiable, Hashable {
     let skin: String?
     let playStore: Bool
     let landscape: Bool
+    /// config.ini entries that give a foldable its hinge, the same ones Android Studio writes. Empty for devices that don't fold.
+    let hinge: [String: String]
+
+    /// Catalog element under the device and the config.ini key Android Studio writes it to.
+    private static let hingeKeys = [
+        ("hinge/count", "hw.sensor.hinge.count"), ("hinge/type", "hw.sensor.hinge.type"), ("hinge/sub-type", "hw.sensor.hinge.sub_type"),
+        ("hinge/ranges", "hw.sensor.hinge.ranges"), ("hinge/defaults", "hw.sensor.hinge.defaults"), ("hinge/areas", "hw.sensor.hinge.areas"),
+        ("hinge/posture-list", "hw.sensor.posture_list"),
+        ("hinge/hinge-angles-posture-definitions", "hw.sensor.hinge_angles_posture_definitions"),
+        ("foldable-region/x-folded-offset", "hw.displayRegion.0.1.xOffset"), ("foldable-region/y-folded-offset", "hw.displayRegion.0.1.yOffset"),
+        ("foldable-region/x-folded-dimension", "hw.displayRegion.0.1.width"), ("foldable-region/y-folded-dimension", "hw.displayRegion.0.1.height"),
+    ]
 
     // ponytail: the catalog only ships inside Android Studio; without it the list is empty.
     private static let jars = ["/Applications", "\(NSHomeDirectory())/Applications"]
@@ -29,8 +41,9 @@ struct DeviceProfile: Identifiable, Hashable {
     }
 
     init?(_ node: XMLNode) {
-        func value(_ name: String) -> String? {
-            (try? node.nodes(forXPath: ".//*[local-name()='\(name)']"))?.first?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        func value(_ path: String) -> String? {
+            let xpath = ".//" + path.split(separator: "/").map { "*[local-name()='\($0)']" }.joined(separator: "/")
+            return (try? node.nodes(forXPath: xpath))?.first?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         guard let id = value("id"), let name = value("name"),
               let width = value("x-dimension").flatMap({ Int($0) }), let height = value("y-dimension").flatMap({ Int($0) }),
@@ -46,6 +59,16 @@ struct DeviceProfile: Identifiable, Hashable {
         playStore = value("playstore-enabled") == "true"
         let orientation = try? node.nodes(forXPath: "./*[local-name()='state'][@default='true']/*[local-name()='screen-orientation']")
         landscape = orientation?.first?.stringValue == "land"
+        var hinge: [String: String] = [:]
+        if value("hinge") != nil {
+            hinge["hw.sensor.hinge"] = "yes"
+            for (path, key) in Self.hingeKeys { hinge[key] = value(path) }
+            if hinge["hw.displayRegion.0.1.width"] != nil {
+                // Android Studio folds onto the first display region at posture 1 (closed) when the catalog has no fold-at-posture.
+                hinge["hw.sensor.hinge.fold_to_displayRegion.0.1_at_posture"] = value("hinge/fold-at-posture") ?? "1"
+            }
+        }
+        self.hinge = hinge
     }
 
     /// "420dpi" or a bucket name like "xxhdpi".
@@ -122,6 +145,7 @@ enum AVD {
         } else {
             entries += [("showDeviceFrame", "no"), ("skin.name", "\(device.width)x\(device.height)")]
         }
+        entries += device.hinge.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
         return entries.map { "\($0)=\($1)\n" }.joined()
     }
 
