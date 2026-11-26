@@ -36,6 +36,13 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>CFBundleName</key><string>DroidHub</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key><string>com.eduardo.droidhub</string>
+            <key>CFBundleURLSchemes</key><array><string>droidhub</string></array>
+        </dict>
+    </array>
     <key>CFBundleVersion</key><string>$VERSION</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>NSHighResolutionCapable</key><true/>

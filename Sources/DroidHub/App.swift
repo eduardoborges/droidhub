@@ -53,6 +53,9 @@ struct ContentView: View {
         }
         .task { await hub.poll() }
         .onAppear { if !welcomed { openWindow(id: "welcome") } }
+        .onOpenURL { url in
+            if let serial = Hub.serial(from: url) { hub.select(serial: serial) }
+        }
     }
 
     @ViewBuilder private func section(_ title: String, _ devices: [Device]) -> some View {

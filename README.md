@@ -41,7 +41,7 @@ And the rest:
 - The inspector switches dark mode, font size, show taps and layout bounds, and lists model, Android version, resolution and density.
 - Physical devices connected through adb show up next to the emulators.
 - The + in the sidebar creates emulators from Android Studio's device catalog and any installed system image, with no SDK cmdline-tools needed. Emulators that are off can be deleted from their context menu.
-- Plays well with AI agents. They drive the device through `adb` while you watch in DroidHub, and Show Taps marks every tap they make.
+- Plays well with AI agents. They drive the device through `adb` while you watch in DroidHub, and Show Taps marks every tap they make. A script can point DroidHub at the device it booted with `open -g "droidhub://select?serial=emulator-5554"`. DroidHub selects it once it finishes booting.
 
 ## Keyboard
 

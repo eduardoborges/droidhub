@@ -135,8 +135,25 @@ final class Hub {
     var selection: Device.ID?
     var booting: Set<Device.ID> = []
     @ObservationIgnored private var props: [String: [String: String]] = [:]
+    /// Serial from a droidhub://select link whose device hasn't finished booting yet.
+    @ObservationIgnored private var pendingSerial: String?
 
     var selected: Device? { devices.first { $0.id == selection } }
+
+    /// droidhub://select?serial=emulator-5554 selects that device, so a script can point DroidHub at the emulator it booted.
+    nonisolated static func serial(from url: URL) -> String? {
+        guard url.scheme == "droidhub", url.host() == "select" else { return nil }
+        return URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "serial" }?.value
+    }
+
+    /// Selects the device with this adb serial, or waits for it to show up if it's still booting.
+    func select(serial: String) {
+        if let device = devices.first(where: { $0.serial == serial }) {
+            selection = device.id
+        } else {
+            pendingSerial = serial
+        }
+    }
 
     init() {
         // Emulators started elsewhere (Android Studio, react-native run-android) bring their
@@ -199,6 +216,10 @@ final class Hub {
 
         booting.subtract(list.filter { $0.serial != nil }.map(\.id))
         if devices != list { devices = list }
+        if let serial = pendingSerial, let device = list.first(where: { $0.serial == serial }) {
+            selection = device.id
+            pendingSerial = nil
+        }
         if selected == nil { selection = list.first { $0.serial != nil }?.id ?? list.first?.id }
     }
 
