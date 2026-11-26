@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/eduardoborges/droidhub/compare/v0.4.0...v0.5.0) (2026-11-26)
+
+
+### Features
+
+* select a device with a droidhub://select link ([ffc82a0](https://github.com/eduardoborges/droidhub/commit/ffc82a01150e50056298bce950d70fa7daf650eb))
+
 ## [0.4.0](https://github.com/eduardoborges/droidhub/compare/v0.3.0...v0.4.0) (2026-11-06)
 
 
